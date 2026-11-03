@@ -14,6 +14,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: CHANGELOG.md has a section for this version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          grep -qx "# $version" CHANGELOG.md || { echo "::error::Add a '# $version' section to CHANGELOG.md before tagging v$version"; exit 1; }
       - run: npm ci
       # Compiles, then runs the unit tests and the real Panda v1/v2 export tests.
       - run: npm test

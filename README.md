@@ -91,12 +91,18 @@ Open this folder in VS Code and press F5 using **Run Extension** to launch an Ex
 
 ### Releasing
 
-CI runs the tests and builds the VSIX on every push to `main` and every pull request. To publish a release, bump `version` in `package.json`, add a matching `# <version>` section to `CHANGELOG.md`, commit, then tag and push:
+CI runs the tests and builds the VSIX on every push to `main` and every pull request, and fails if `CHANGELOG.md` has no section for the current `package.json` version. To publish a release:
+
+1. Bump `version` in `package.json` and add a matching `# <version>` section to `CHANGELOG.md`.
+2. Commit, push `main`, and wait for CI to pass.
+3. Tag that commit with the version from `package.json` and push the tag:
 
 ```sh
-git tag v0.5.1
-git push origin v0.5.1
+version=v$(node -p "require('./package.json').version")
+git tag -a "$version" -m "$version" && git push origin "$version"
 ```
+
+A tag that fails is not reused: bump to the next version rather than moving it.
 
 The Release workflow checks that the tag matches `package.json`, runs the tests, builds the VSIX and publishes a GitHub Release with it attached and the CHANGELOG section as notes.
 

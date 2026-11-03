@@ -1,6 +1,6 @@
 {
   "name": "cerberus-tokens",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Project-aware design token completion, hovers and insertion for Cerberus and Panda CSS.",
   "main": "./dist/extension.js",
   "scripts": {

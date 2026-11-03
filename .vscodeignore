@@ -11,3 +11,6 @@ tsconfig.json
 package-lock.json
 design-system.json
 *.vsix
+.github/**
+.gitignore
+.npmrc

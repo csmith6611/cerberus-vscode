@@ -28,6 +28,6 @@ Panda v2 design-system spec support. On v2, generated tokens now come from the c
 
 Also: CSS variable names in hovers and a **Copy CSS Variable** command; the defining preset or config file in hovers (v2); warnings for deprecated tokens in open editors (`cerberus.deprecations`); recipe variant completions and hovers for recipe components (`<Button palette="…">`) and `styled-system/recipes` calls. CSS variables and recipes also come from v1 configs.
 
-# 0.5.2
+# 0.5.5
 
 Publisher set up for the Visual Studio Marketplace (`ConnorSmith`). Dependencies are pinned to exact versions.
