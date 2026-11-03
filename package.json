@@ -28,7 +28,7 @@
     "@vscode/vsce": "^4.1.0"
   },
   "displayName": "Cerberus Tokens",
-  "publisher": "local-cerberus",
+  "publisher": "ConnorSmith",
   "engines": {
     "vscode": "^1.90.0"
   },
