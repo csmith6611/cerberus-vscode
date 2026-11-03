@@ -31,3 +31,7 @@ Also: CSS variable names in hovers and a **Copy CSS Variable** command; the defi
 # 0.5.5
 
 Publisher set up for the Visual Studio Marketplace (`ConnorSmith`). Dependencies are pinned to exact versions.
+
+# 0.5.6
+
+Faster completions: hover details are built only for the focused item, and alias resolution uses a name index. Only files matching `cerberus.manifestGlob` trigger a reload, not every JSON write. Multiple `panda.config` files generate concurrently, and their processes are stopped when a config is saved, on **Refresh Tokens** and on shutdown. Generation errors are always reported. Manifests with unsafe token or CSS variable names are rejected, and very deep or branching alias chains resolve as unresolved instead of hanging. Release builds run with a read-only token; actions are pinned to commit SHAs.
