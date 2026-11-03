@@ -27,3 +27,7 @@ Panda v2 support: projects on `@pandacss/dev` 2.x load through `@pandacss/dev/no
 Panda v2 design-system spec support. On v2, generated tokens now come from the compiler's spec (Panda's own resolution, including derived tokens such as negative spacing), falling back to `loadConfig`. A spec file (`panda codegen --spec cerberus.tokens.json`) is also accepted as an index. Themed aliases resolve through the theme's primitives, matching the runtime CSS variables rather than the spec's base-resolved flat values. Spec `deprecatedReason` is shown as the deprecation message.
 
 Also: CSS variable names in hovers and a **Copy CSS Variable** command; the defining preset or config file in hovers (v2); warnings for deprecated tokens in open editors (`cerberus.deprecations`); recipe variant completions and hovers for recipe components (`<Button palette="…">`) and `styled-system/recipes` calls. CSS variables and recipes also come from v1 configs.
+
+# 0.5.2
+
+Publisher set up for the Visual Studio Marketplace (`ConnorSmith`). Dependencies are pinned to exact versions.
