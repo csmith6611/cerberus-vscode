@@ -14,12 +14,18 @@ export interface Token {
 export interface Recipe { variants: Record<string, string[]>; defaultVariants?: Record<string, string>; description?: string; deprecated?: boolean | string }
 /** `themes` holds Panda theme variants (config.themes, e.g. elysium): tokens that override or add to `tokens`. */
 export interface Manifest { schemaVersion: 1; tokens: Token[]; themes?: Record<string, Token[]>; recipes?: Record<string, Recipe>; generatedAt?: string }
+// Names reach hovers, completions and reference syntax; CSS variables are copied into the user's stylesheets.
+// Panda escapes '.' and '/' in variable names (e.g. --sizes-1\/2), so backslashes are allowed there.
+const tokenName = /^[^\s`'"<>{}\\]+$/;
+const cssVarName = /^--[\w\\./%-]+$/;
 function validateTokens(tokens: unknown): void {
   if (!Array.isArray(tokens)) throw new Error('Expected a token array');
   if (tokens.length > 100000) throw new Error('Token manifest exceeds 100,000 tokens');
   const names = new Set<string>();
   for (const token of tokens) {
     if (!token || typeof token.name !== 'string' || typeof token.category !== 'string' || !token.name.startsWith(token.category + '.') || !('value' in token)) throw new Error('Invalid token entry');
+    if (!tokenName.test(token.name)) throw new Error(`Invalid token name: ${JSON.stringify(token.name)}`);
+    if (typeof token.cssVar === 'string' && !cssVarName.test(token.cssVar)) throw new Error(`Invalid CSS variable for ${token.name}`);
     if (names.has(token.name)) throw new Error(`Duplicate token: ${token.name}`);
     names.add(token.name);
     if (token.description !== undefined && typeof token.description !== 'string') throw new Error('Invalid description');
@@ -147,9 +153,21 @@ export function mergeTokens(primitives: unknown, semantic: unknown): Token[] {
   return [...new Map([...flattenTokens(primitives), ...flattenTokens(semantic, true)].map(t => [t.name, t])).values()];
 }
 export interface Resolution { value: unknown; chain: string[]; unresolved?: boolean }
-export function resolveToken(token: Token, tokens: Token[], condition = 'base', seen = new Set<string>()): Resolution {
-  if (seen.has(token.name)) return {value: '[circular reference]', chain: [token.name], unresolved: true};
-  const visited = new Set(seen).add(token.name);
+const indexes = new WeakMap<Token[], Map<string, Token>>();
+function indexOf(tokens: Token[]) {
+  let byName = indexes.get(tokens);
+  if (!byName) indexes.set(tokens, byName = new Map(tokens.map(t => [t.name, t])));
+  return byName;
+}
+// Bounds the references followed per resolution, so a hostile manifest (very deep or fanned-out aliases) can't hang or overflow the stack.
+const maxSteps = 256;
+export function resolveToken(token: Token, tokens: Token[], condition = 'base'): Resolution {
+  return resolve(token, indexOf(tokens), condition, new Set(), {steps: maxSteps});
+}
+function resolve(token: Token, byName: Map<string, Token>, condition: string, path: Set<string>, budget: {steps: number}): Resolution {
+  if (path.has(token.name)) return {value: '[circular reference]', chain: [token.name], unresolved: true};
+  if (--budget.steps < 0) return {value: '[reference chain too long]', chain: [token.name], unresolved: true};
+  path.add(token.name);
   let value = token.value;
   // Objects without a base/condition key may be composite tokens (e.g. shadows).
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -160,25 +178,31 @@ export function resolveToken(token: Token, tokens: Token[], condition = 'base', 
   let unresolved = false;
   if (typeof value === 'string') {
     value = value.replace(/\{([^{}]+)\}/g, (original, name: string) => {
-      const next = tokens.find(t => t.name === name);
+      const next = byName.get(name);
       if (!next) { unresolved = true; return original; }
-      const resolved = resolveToken(next, tokens, condition, visited);
+      const resolved = resolve(next, byName, condition, path, budget);
       chain.push(...resolved.chain);
       unresolved ||= !!resolved.unresolved;
       return typeof resolved.value === 'object' ? JSON.stringify(resolved.value) : String(resolved.value);
     });
   }
+  path.delete(token.name);
   return {value, chain: [...new Set(chain)], unresolved};
 }
-export function conditionsFor(token: Token, tokens: Token[], seen = new Set<string>()): string[] {
-  if (seen.has(token.name)) return [];
-  const visited = new Set(seen).add(token.name);
-  const value = token.value;
-  const result = new Set<string>(['base']);
-  if (value && typeof value === 'object' && !Array.isArray(value) && 'base' in value) Object.keys(value).forEach(k => result.add(k));
-  for (const match of JSON.stringify(value)?.matchAll(/\{([^{}]+)\}/g) ?? []) {
-    const next = tokens.find(t => t.name === match[1]);
-    if (next) conditionsFor(next, tokens, visited).forEach(c => result.add(c));
+/** Every condition the token's value, or any token it references, defines. */
+export function conditionsFor(token: Token, tokens: Token[]): string[] {
+  const byName = indexOf(tokens), visited = new Set<string>(), result = new Set<string>(['base']);
+  // Iterative, each token visited once: the result is a union, so depth and fan-out don't matter.
+  const pending = [token];
+  for (let current = pending.pop(); current; current = pending.pop()) {
+    if (visited.has(current.name)) continue;
+    visited.add(current.name);
+    const value = current.value;
+    if (value && typeof value === 'object' && !Array.isArray(value) && 'base' in value) Object.keys(value).forEach(k => result.add(k));
+    for (const match of JSON.stringify(value)?.matchAll(/\{([^{}]+)\}/g) ?? []) {
+      const next = byName.get(match[1]);
+      if (next) pending.push(next);
+    }
   }
   return [...result];
 }

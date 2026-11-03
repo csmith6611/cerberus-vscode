@@ -8,6 +8,7 @@ import { getContext, getContexts, highestThemeAttributes, readThemeAttributes, S
 
 const decoder = new TextDecoder();
 const configGlob = '**/panda.config.{ts,mts,cts,js,mjs,cjs}';
+const defaultManifestGlob = '**/cerberus.tokens.json';
 const excluded = '**/{node_modules,.git,dist}/**';
 // Files scanned (grep-style) for <html data-panda-theme data-color-mode>, anywhere in the workspace.
 const sourceGlob = '**/*.{tsx,jsx,ts,js,mjs,html,astro,vue,svelte}';
@@ -102,6 +103,10 @@ function variantHover(name: string, variant: string, recipe: Recipe): vscode.Mar
   md.isTrusted = false;
   return md;
 }
+/** A token completion; its documentation is built in resolveCompletionItem, only for the item the user focuses. */
+class TokenCompletion extends vscode.CompletionItem {
+  constructor(label: string, readonly token: Token, readonly index: Index) { super(label, vscode.CompletionItemKind.Value); }
+}
 /** The token a token-valued context names, if any. */
 function tokenAt(manifest: Manifest, ctx: StyleContext): Token | undefined {
   return ctx.category === 'variant' ? undefined : lookup(manifest).get(ctx.fullName ? ctx.value : `${ctx.category}.${ctx.value}`);
@@ -112,30 +117,48 @@ export async function activate(extension: vscode.ExtensionContext) {
   extension.subscriptions.push(output);
   // Tokens generated in memory from each Panda config, keyed by config URI. Rejections are cached too,
   // so a broken config is not re-executed on every unrelated JSON change; config saves and Refresh Tokens clear it.
-  const generated = new Map<string, Promise<Manifest>>();
-  async function generate(uri: vscode.Uri): Promise<Manifest> {
+  // Each entry's controller kills its process when the entry is dropped (config saved, Refresh Tokens, deactivation).
+  const generated = new Map<string, {manifest: Promise<Manifest>; controller: AbortController}>();
+  function forget(key?: string) {
+    for (const [k, entry] of generated) if (key === undefined || k === key) { entry.controller.abort(); generated.delete(k); }
+  }
+  async function generate(uri: vscode.Uri, signal: AbortSignal): Promise<Manifest> {
     // Loading the config executes project code, so it runs in a separate Node process (never in the extension host).
     const dir = await mkdtemp(join(tmpdir(), 'cerberus-tokens-'));
     const out = join(dir, 'tokens.json');
     try {
       await new Promise<void>((resolve, reject) => execFile(process.execPath,
         [extension.asAbsolutePath('scripts/export-tokens.cjs'), '--cwd', dirname(uri.fsPath), '--config', uri.fsPath, '--out', out],
-        {cwd: dirname(uri.fsPath), env: {...process.env, ELECTRON_RUN_AS_NODE: '1'}, timeout: 120_000},
+        {cwd: dirname(uri.fsPath), env: {...process.env, ELECTRON_RUN_AS_NODE: '1'}, timeout: 120_000, signal},
         (error, _stdout, stderr) => error ? reject(new Error(stderr.trim() || error.message)) : resolve()));
       return readManifest(await readFile(out, 'utf8'));
     } finally { await rm(dir, {recursive: true, force: true}); }
+  }
+  function generatedTokens(uri: vscode.Uri): Promise<Manifest> {
+    const key = uri.toString(), cached = generated.get(key);
+    if (cached) return cached.manifest;
+    const controller = new AbortController(), manifest = generate(uri, controller.signal);
+    generated.set(key, {manifest, controller});
+    // Reported here, once, so the error isn't lost when the refresh that started it is superseded.
+    const settled = manifest.then(() => undefined, error => {
+      if (controller.signal.aborted) return;
+      output.appendLine(`${uri.fsPath}: ${error instanceof Error ? error.message : String(error)}`);
+      void vscode.window.showWarningMessage('Some Cerberus tokens could not be loaded. See the Cerberus Tokens output channel.');
+    });
+    void vscode.window.withProgress({location: vscode.ProgressLocation.Window, title: 'Cerberus: generating tokens'}, () => settled);
+    return manifest;
   }
   // Scanned once, then kept current on save; Refresh Tokens and workspace folder changes rescan.
   let themeFiles: Promise<Map<string, ThemeAttributes>> | undefined;
   let generation = 0;
   async function refresh(regenerate = false) {
     const current = ++generation;
-    if (regenerate) { generated.clear(); themeFiles = undefined; }
+    if (regenerate) { forget(); themeFiles = undefined; }
     const next = new Map<string, Manifest>();
     const errors: string[] = [];
     const manifestDirs = new Set<string>();
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const pattern = config(folder.uri).get<string>('manifestGlob', '**/cerberus.tokens.json');
+      const pattern = config(folder.uri).get<string>('manifestGlob', defaultManifestGlob);
       const uris = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, pattern), excluded, 200);
       for (const uri of uris) {
         manifestDirs.add(vscode.Uri.joinPath(uri, '..').toString());
@@ -146,22 +169,18 @@ export async function activate(extension: vscode.ExtensionContext) {
         } catch (error) { errors.push(`${uri.fsPath}: ${String(error)}`); }
       }
     }
+    const configs: vscode.Uri[] = [];
     for (const folder of vscode.workspace.isTrusted ? vscode.workspace.workspaceFolders ?? [] : []) {
       if (folder.uri.scheme !== 'file' || !config(folder.uri).get<boolean>('autoGenerate', true)) continue;
       for (const uri of await vscode.workspace.findFiles(new vscode.RelativePattern(folder, configGlob), excluded, 50)) {
         // An exported manifest beside the config is an explicit override.
-        if (manifestDirs.has(vscode.Uri.joinPath(uri, '..').toString())) continue;
-        const key = uri.toString();
-        let pending = generated.get(key);
-        const fresh = !pending;
-        if (!pending) {
-          generated.set(key, pending = generate(uri));
-          void vscode.window.withProgress({location: vscode.ProgressLocation.Window, title: 'Cerberus: generating tokens'}, () => pending!.catch(() => undefined));
-        }
-        try { next.set(key, await pending); }
-        catch (error) { if (fresh) errors.push(`${uri.fsPath}: ${error instanceof Error ? error.message : String(error)}`); }
+        if (!manifestDirs.has(vscode.Uri.joinPath(uri, '..').toString())) configs.push(uri);
       }
     }
+    // Generated concurrently, one process per config; failures are reported by generatedTokens.
+    (await Promise.allSettled(configs.map(generatedTokens))).forEach((result, i) => {
+      if (result.status === 'fulfilled') next.set(configs[i].toString(), result.value);
+    });
     const themed = new Map<string, Index>();
     const files = next.size ? await (themeFiles ??= scanThemeFiles()).catch(() => new Map<string, ThemeAttributes>()) : new Map<string, ThemeAttributes>();
     for (const [key, manifest] of next) {
@@ -181,11 +200,19 @@ export async function activate(extension: vscode.ExtensionContext) {
   }
   let timer: ReturnType<typeof setTimeout> | undefined;
   function scheduleRefresh() { clearTimeout(timer); timer = setTimeout(() => void refresh().catch(e => output.appendLine(String(e))), 200); }
-  // Watch JSON files, including custom manifest filenames; actual loading uses the configured glob.
-  const watcher = vscode.workspace.createFileSystemWatcher('**/*.json');
+  // One watcher per folder for its configured manifest glob, so unrelated JSON writes (build output, caches) don't refresh.
+  let manifestWatchers: vscode.Disposable[] = [];
+  function watchManifests() {
+    manifestWatchers.forEach(d => d.dispose());
+    manifestWatchers = (vscode.workspace.workspaceFolders ?? []).flatMap(folder => {
+      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, config(folder.uri).get<string>('manifestGlob', defaultManifestGlob)));
+      return [watcher, watcher.onDidChange(scheduleRefresh), watcher.onDidCreate(scheduleRefresh), watcher.onDidDelete(scheduleRefresh)];
+    });
+  }
+  watchManifests();
   const configWatcher = vscode.workspace.createFileSystemWatcher(configGlob);
-  const configChanged = (uri: vscode.Uri) => { generated.delete(uri.toString()); scheduleRefresh(); };
-  extension.subscriptions.push(watcher, watcher.onDidChange(scheduleRefresh), watcher.onDidCreate(scheduleRefresh), watcher.onDidDelete(scheduleRefresh),
+  const configChanged = (uri: vscode.Uri) => { forget(uri.toString()); scheduleRefresh(); };
+  extension.subscriptions.push({dispose: () => { manifestWatchers.forEach(d => d.dispose()); forget(); }},
     configWatcher, configWatcher.onDidChange(configChanged), configWatcher.onDidCreate(configChanged), configWatcher.onDidDelete(configChanged),
     vscode.workspace.onDidGrantWorkspaceTrust(scheduleRefresh),
     vscode.workspace.onDidSaveTextDocument(async document => {
@@ -195,7 +222,8 @@ export async function activate(extension: vscode.ExtensionContext) {
       if (attributes.theme || attributes.colorMode) files.set(key, attributes); else files.delete(key);
       if (before?.theme !== attributes.theme || before?.colorMode !== attributes.colorMode) scheduleRefresh();
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => { themeFiles = undefined; scheduleRefresh(); }), vscode.workspace.onDidChangeConfiguration(e => {
+    vscode.workspace.onDidChangeWorkspaceFolders(() => { themeFiles = undefined; watchManifests(); scheduleRefresh(); }), vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('cerberus.manifestGlob')) watchManifests();
       if (['manifestGlob', 'autoGenerate', 'theme'].some(key => e.affectsConfiguration(`cerberus.${key}`))) scheduleRefresh();
       else if (e.affectsConfiguration('cerberus')) decorateVisible();
     }),
@@ -263,15 +291,18 @@ export async function activate(extension: vscode.ExtensionContext) {
       }
       return candidates(manifest, ctx).map((token, i) => {
         const name = ctx.fullName ? token.name : shortName(token);
-        const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Value);
+        const item = new TokenCompletion(name, token, index);
         item.range = new vscode.Range(document.positionAt(ctx.start), document.positionAt(ctx.end));
         item.insertText = name;
         item.detail = `${token.semantic ? 'Semantic' : 'Primitive'} · ${display(resolveToken(token, manifest.tokens).value)}`;
-        item.documentation = hover(token, index);
         item.sortText = String(i).padStart(6, '0');
         if (token.deprecated) item.tags = [vscode.CompletionItemTag.Deprecated];
         return item;
       });
+    },
+    resolveCompletionItem(item) {
+      if (item instanceof TokenCompletion) item.documentation = hover(item.token, item.index);
+      return item;
     }
   }, '"', "'", '.'));
   extension.subscriptions.push(vscode.languages.registerHoverProvider(selector, {

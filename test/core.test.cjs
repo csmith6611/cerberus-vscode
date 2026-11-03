@@ -44,6 +44,22 @@ test('detects cyclic and missing aliases', () => {
   assert.equal(resolveToken(tokens[0],tokens).unresolved,true);
   assert.equal(resolveToken(tokens[2],tokens).unresolved,true);
 });
+test('bounds deep and fanned-out alias chains from hostile manifests', () => {
+  const deep = Array.from({length: 10000}, (_, i) => ({name: `colors.c${i}`, category: 'colors', value: i === 9999 ? '#fff' : `{colors.c${i + 1}}`}));
+  assert.equal(resolveToken(deep[0], deep).unresolved, true);
+  assert.equal(conditionsFor(deep[0], deep).length, 1);
+  assert.deepEqual(swatchColors(deep[0], deep), []);
+  // Each token references the next twice: 2^40 paths without a budget.
+  const wide = Array.from({length: 40}, (_, i) => ({name: `colors.w${i}`, category: 'colors', value: i === 39 ? '#fff' : `{colors.w${i + 1}} {colors.w${i + 1}}`}));
+  assert.equal(resolveToken(wide[0], wide).unresolved, true);
+  assert.equal(resolveToken(deep[9990], deep).value, '#fff');
+});
+test('rejects token names and CSS variables that could inject markup or CSS', () => {
+  const manifest = token => JSON.stringify({schemaVersion: 1, tokens: [{category: 'colors', value: '#fff', ...token}]});
+  assert.throws(() => readManifest(manifest({name: 'colors.a\n```\n[x](https://e)'})), /Invalid token name/);
+  assert.throws(() => readManifest(manifest({name: 'colors.a', cssVar: '--a); } body { background: red'})), /Invalid CSS variable/);
+  assert.equal(readManifest(manifest({name: 'sizes.1/2', category: 'sizes', cssVar: '--sizes-1\\/2'})).tokens[0].cssVar, '--sizes-1\\/2');
+});
 test('composite tokens stay intact; conditional aliases expose inherited modes', () => {
   const tokens=mergeTokens({shadows:{sm:{value:{offsetX:0,blur:8}}}},{colors:{a:{value:'{colors.b}'},b:{value:{base:'#000',_dark:'#fff'}}}});
   assert.deepEqual(resolveToken(tokens[0],tokens).value,{offsetX:0,blur:8});
