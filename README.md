@@ -22,7 +22,7 @@ This is a working development MVP, not a Marketplace release. It does not send t
 
 ## Install the packaged extension
 
-In VS Code, open Extensions → `…` → **Install from VSIX…** and select `cerberus-tokens-0.5.0.vsix`.
+Download the latest `cerberus-tokens-<version>.vsix` from [Releases](https://github.com/csmith6611/cerberus-vscode/releases). In VS Code, open Extensions → `…` → **Install from VSIX…** and select it.
 
 In a trusted workspace with a `panda.config.*`, tokens load automatically (see below). Keep the extracted source folder only if you need the optional exporter.
 
@@ -88,6 +88,17 @@ npm run package
 ```
 
 Open this folder in VS Code and press F5 using **Run Extension** to launch an Extension Development Host. In that host open `examples` or a real application with an exported manifest.
+
+### Releasing
+
+CI runs the tests and builds the VSIX on every push to `main` and every pull request. To publish a release, bump `version` in `package.json`, add a matching `# <version>` section to `CHANGELOG.md`, commit, then tag and push:
+
+```sh
+git tag v0.5.1
+git push origin v0.5.1
+```
+
+The Release workflow checks that the tag matches `package.json`, runs the tests, builds the VSIX and publishes a GitHub Release with it attached and the CHANGELOG section as notes.
 
 ## Compatibility and limits
 
