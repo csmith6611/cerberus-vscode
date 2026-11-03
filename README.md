@@ -1,24 +1,72 @@
 # Cerberus Tokens — VS Code MVP
 
-A local-first extension for project-specific Cerberus/Panda design tokens.
+Design-token help for Cerberus/Panda projects: completions, hovers, colour swatches and deprecation warnings, using your project's own tokens.
 
-## Included
+It runs locally: no telemetry, no network service. This is a development MVP, not a Marketplace release.
 
-- Contextual completion in imported Cerberus JSX components, factory components, `css()` / `cva()` / `sva()` and recipe objects.
-- Categories for common color, spacing, size, typography, radius, shadow, duration and z-index properties, including nested conditions.
-- Searchable **Cerberus: Insert Token** command. Within a supported token string it replaces that string's contents; elsewhere it inserts a full token name at the selection.
-- Inline colour swatches after colour token strings, like VS Code's CSS colour decorators. Tokens that differ by condition (e.g. `base` vs `_dark`) show a diagonally split swatch: top-left is light, bottom-right dark. A title-bar button cycles swatches between **auto** (default: follows the app's `data-color-mode`; `system` or none shows both), **both**, **light** and **dark** (`cerberus.swatchMode`). Light/dark use a condition whose name contains `light`/`dark` (e.g. `_dark`, `_lightMode`), otherwise `base`. Disable swatches with `cerberus.colorSwatches`.
-- Hover descriptions, primitive/semantic classification, conditional values and alias chains, with circular-reference detection.
-- Deprecation labels and semantic-token prioritization. Deprecated tokens in open editors are struck through and reported with their deprecation reason (`cerberus.deprecations`: `warning` (default), `information`, `hint` to keep them out of the Problems panel, or `off`).
-- CSS variable names in hovers (`var(--cerberus-colors-page-bg-initial)`), and **Cerberus: Copy CSS Variable**, which copies `var(--…)` for the token under the cursor, or for a picked one.
-- Where each token comes from, in hovers (e.g. `Defined in @cerberus/preset-elysium-theme`); under a theme, the theme's preset. Panda v2 only.
-- Recipe variant completions and hovers: `<Button palette="` suggests the `button` recipe's palettes, with the default marked, as does `button({size: '…'})` imported from `styled-system/recipes`. Components map to recipes by name (`Button` → `button`, `ButtonGroup` → `buttonGroup`, `Accordion.Root` → `accordion`).
-- Per-application manifests, including multiple applications in a monorepo. The nearest ancestor index wins.
-- Brand theme variants (e.g. Elysium): a static `data-panda-theme` found anywhere in the repo (a grep-style scan of source files, excluding `node_modules`, build output and `styled-system`) selects the Panda `config.themes` variant, so hovers, completions and swatches show that brand's values (e.g. `action.text.100` → Elysium's `brand.40`). When several files set it, matches inside the app's root win, then the **highest** one (fewest folders below the workspace root; ties by path). `data-color-mode` is chosen the same way. The scan runs once, is kept current on save, and reruns on **Refresh Tokens**. Override with `cerberus.theme`.
-- Tokens loaded automatically from `panda.config.*` in trusted workspaces, held in memory, no JSON required.
-- JSON index auto-refresh and **Cerberus: Refresh Tokens** command.
+## Features
 
-This is a working development MVP, not a Marketplace release. It does not send telemetry or use a network service.
+**Completion and insertion**
+
+- Token completions in Cerberus JSX components, factory components, `css()` / `cva()` / `sva()` and recipe objects, including nested conditions.
+- Covers common colour, spacing, size, typography, radius, shadow, duration and z-index properties.
+- Recipe variants: `<Button palette="` suggests the `button` recipe's palettes, with the default marked. See [Recipe variants](#recipe-variants).
+- **Cerberus: Insert Token**: a searchable token picker.
+
+**Hovers**
+
+- Description, primitive or semantic, conditional values and alias chains (circular references are detected).
+- The CSS variable, e.g. `var(--cerberus-colors-page-bg-initial)`.
+- Where the token is defined, e.g. `Defined in @cerberus/preset-elysium-theme` (Panda v2 only).
+- **Cerberus: Copy CSS Variable** copies `var(--…)` for the token under the cursor, or one you pick.
+
+**Colour swatches**
+
+- A swatch after each colour token, like VS Code's CSS colour decorators.
+- Tokens with different light and dark values show a split swatch. See [Colour swatches](#colour-swatches).
+
+**Deprecations**
+
+- Deprecated tokens are labelled, struck through and reported with the reason. Semantic tokens are ranked first.
+
+**Projects and themes**
+
+- In trusted workspaces, tokens load automatically from `panda.config.*` and stay in memory. No JSON required.
+- Works with several apps in a monorepo. Each file uses the nearest token index above it.
+- Exported JSON indexes refresh automatically. **Cerberus: Refresh Tokens** reloads everything.
+- Brand themes (e.g. Elysium) are detected from `data-panda-theme`. See [Brand themes](#brand-themes).
+
+### Colour swatches
+
+The top-left half of a split swatch is light, the bottom-right dark. A title-bar button cycles the mode (`cerberus.swatchMode`):
+
+| Mode | Shows |
+| --- | --- |
+| `auto` (default) | Follows the app's `data-color-mode`. With `system` or no value, both. |
+| `both` | Light and dark |
+| `light` / `dark` | One side only |
+
+Light and dark use a condition whose name contains `light` or `dark` (e.g. `_dark`, `_lightMode`), otherwise `base`. Turn swatches off with `cerberus.colorSwatches`.
+
+### Brand themes
+
+A static `data-panda-theme="elysium"` anywhere in the repo selects that Panda `config.themes` variant. Hovers, completions and swatches then show the brand's values (e.g. `action.text.100` → Elysium's `brand.40`). `data-color-mode` is found the same way.
+
+- **Search:** source files, excluding `node_modules`, build output and `styled-system`. It runs once, updates on save, and reruns on **Refresh Tokens**.
+- **Several matches:** a match inside the app's root wins, then the one nearest the workspace root (ties by path).
+- **Override:** set `cerberus.theme`.
+
+### Recipe variants
+
+Works on components and on recipe functions imported from `styled-system/recipes`, e.g. `button({size: '…'})`. Components match recipes by name: `Button` → `button`, `ButtonGroup` → `buttonGroup`, `Accordion.Root` → `accordion`.
+
+### Insert Token
+
+Inside a token string, it replaces the string's contents. Anywhere else, it inserts the full token name.
+
+### Deprecation severity
+
+`cerberus.deprecations` sets how they're reported: `warning` (default), `information`, `hint` (keeps them out of the Problems panel), or `off`.
 
 ## Install the packaged extension
 
