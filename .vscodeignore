@@ -1,0 +1,13 @@
+src/**
+test/**
+.vscode/**
+node_modules/@types/**
+node_modules/@pandacss/**
+node_modules/@vscode/**
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/docs/**
+tsconfig.json
+package-lock.json
+design-system.json
+*.vsix

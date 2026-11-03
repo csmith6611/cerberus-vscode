@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.vsix
+design-system.json
+test/panda-fixture-*/

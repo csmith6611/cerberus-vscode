@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "tokens": [
+    {"name":"colors.neutral.100","category":"colors","value":"#f4f4f5"},
+    {"name":"colors.neutral.900","category":"colors","value":"#18181b"},
+    {"name":"colors.page.bg.initial","category":"colors","semantic":true,"description":"Illustrative page background; actual values come from your project.","value":{"base":"{colors.neutral.100}","_dark":"{colors.neutral.900}"}},
+    {"name":"colors.page.fg.initial","category":"colors","semantic":true,"description":"Illustrative page foreground.","value":{"base":"{colors.neutral.900}","_dark":"{colors.neutral.100}"}},
+    {"name":"colors.page.surface.initial","category":"colors","semantic":true,"deprecated":"Example deprecation notice.","value":"{colors.page.bg.initial}"},
+    {"name":"spacing.4","category":"spacing","value":"1rem"},
+    {"name":"spacing.8","category":"spacing","value":"2rem"}
+  ],
+  "themes": {
+    "elysium": [
+      {"name":"colors.neutral.100","category":"colors","value":"#f3eafb"},
+      {"name":"colors.neutral.900","category":"colors","value":"#2a0a45"}
+    ]
+  }
+}

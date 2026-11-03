@@ -1,0 +1,206 @@
+{
+  "name": "cerberus-tokens",
+  "version": "0.5.0",
+  "description": "Project-aware design token completion, hovers and insertion for Cerberus and Panda CSS.",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p .",
+    "test": "npm run compile && node --test test/*.test.cjs",
+    "package": "vsce package --allow-missing-repository"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@pandacss/dev-v2": "npm:@pandacss/dev@^2.4.0",
+    "@pandacss/node": "^1.12.1",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^4.1.0"
+  },
+  "displayName": "Cerberus Tokens",
+  "publisher": "local-cerberus",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "workspaceContains:**/panda.config.{ts,mts,cts,js,mjs,cjs}"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "cerberus.insertToken",
+        "title": "Cerberus: Insert Token"
+      },
+      {
+        "command": "cerberus.copyCssVariable",
+        "title": "Cerberus: Copy CSS Variable"
+      },
+      {
+        "command": "cerberus.refreshTokens",
+        "title": "Cerberus: Refresh Tokens"
+      },
+      {
+        "command": "cerberus.toggleSwatchMode",
+        "title": "Cerberus: Toggle Swatch Mode (Auto / Both / Light / Dark)"
+      },
+      {
+        "command": "cerberus.swatchMode.auto",
+        "title": "Cerberus swatches: auto, follows data-color-mode (click for light + dark)",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "cerberus.swatchMode.both",
+        "title": "Cerberus swatches: light + dark (click for light)",
+        "icon": "$(color-mode)"
+      },
+      {
+        "command": "cerberus.swatchMode.light",
+        "title": "Cerberus swatches: light (click for dark)",
+        "icon": "$(circle-large-outline)"
+      },
+      {
+        "command": "cerberus.swatchMode.dark",
+        "title": "Cerberus swatches: dark (click for auto)",
+        "icon": "$(circle-large-filled)"
+      }
+    ],
+    "configuration": {
+      "title": "Cerberus Tokens",
+      "properties": {
+        "cerberus.manifestGlob": {
+          "type": "string",
+          "default": "**/cerberus.tokens.json",
+          "scope": "resource",
+          "description": "Glob relative to each workspace folder. Place each manifest (an exported index or a Panda v2 design-system spec) at its application root."
+        },
+        "cerberus.importRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "Additional styled-system import roots, e.g. @/styled-system."
+        },
+        "cerberus.components": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "Local wrapper component names that accept Panda style props."
+        },
+        "cerberus.colorSwatches": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Show a colour swatch after colour token strings. Tokens with a different value in another condition (e.g. _dark) show a diagonally split swatch."
+        },
+        "cerberus.autoGenerate": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "In trusted workspaces, load tokens directly from each panda.config file (run in a separate process, kept in memory). A cerberus.tokens.json in the same folder takes precedence."
+        },
+        "cerberus.swatchMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "both",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow the app's data-color-mode attribute (both when it is 'system' or not found).",
+            "Split swatch when the light and dark values differ.",
+            "Light value (a condition containing 'light', else base).",
+            "Dark value (a condition containing 'dark', else base)."
+          ],
+          "default": "auto",
+          "scope": "window",
+          "description": "Which mode colour swatches show. Also toggled from the editor title bar button."
+        },
+        "cerberus.deprecations": {
+          "type": "string",
+          "enum": [
+            "warning",
+            "information",
+            "hint",
+            "off"
+          ],
+          "default": "warning",
+          "scope": "resource",
+          "description": "How uses of deprecated tokens are reported in open editors. All levels strike the token through; 'hint' keeps them out of the Problems panel."
+        },
+        "cerberus.theme": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Panda theme variant to preview (e.g. elysium). Empty: detected from data-panda-theme in the app's root layout/_document/index files."
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "cerberus.swatchMode.auto",
+          "when": "config.cerberus.colorSwatches && resourceLangId =~ /^(typescript|javascript)(react)?$/ && config.cerberus.swatchMode == auto",
+          "group": "navigation"
+        },
+        {
+          "command": "cerberus.swatchMode.both",
+          "when": "config.cerberus.colorSwatches && resourceLangId =~ /^(typescript|javascript)(react)?$/ && config.cerberus.swatchMode == both",
+          "group": "navigation"
+        },
+        {
+          "command": "cerberus.swatchMode.light",
+          "when": "config.cerberus.colorSwatches && resourceLangId =~ /^(typescript|javascript)(react)?$/ && config.cerberus.swatchMode == light",
+          "group": "navigation"
+        },
+        {
+          "command": "cerberus.swatchMode.dark",
+          "when": "config.cerberus.colorSwatches && resourceLangId =~ /^(typescript|javascript)(react)?$/ && config.cerberus.swatchMode == dark",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cerberus.swatchMode.auto",
+          "when": "false"
+        },
+        {
+          "command": "cerberus.swatchMode.both",
+          "when": "false"
+        },
+        {
+          "command": "cerberus.swatchMode.light",
+          "when": "false"
+        },
+        {
+          "command": "cerberus.swatchMode.dark",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Tokens are generated from panda.config only in trusted workspaces, because loading it runs project code. Exported cerberus.tokens.json files are still read."
+    }
+  }
+}
